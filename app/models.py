@@ -7,7 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 
-class Status(str, enum.Enum):
+class Status(enum.StrEnum):
     sent = "sent"
     viewed = "viewed"
     invited = "invited"
