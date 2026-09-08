@@ -3,7 +3,7 @@ from datetime import date
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app import schemas
+from app import cache, schemas
 from app.models import Application, Event, Platform, Status
 
 # статусы, которые означают, что работодатель как-то отреагировал
@@ -108,3 +108,40 @@ def platform_stats(db: Session) -> list[dict]:
         .order_by(func.count(Application.id).desc())
     )
     return [dict(row._mapping) for row in db.execute(stmt)]
+
+
+# --- Кэшированные функции доступа к данным ---
+# cache.cached кладёт в Redis json.dumps(результата), поэтому эти обёртки отдают
+# готовые dict'ы, а не ORM-объекты (их json не сериализует). Кэшируется здесь,
+# на слое доступа к данным, а не на самих хендлерах.
+
+
+@cache.cached("platforms:list", ttl=300)
+async def list_platforms_cached(db: Session) -> list[dict]:
+    return [schemas.PlatformRead.model_validate(p).model_dump() for p in list_platforms(db)]
+
+
+@cache.cached("applications:list", ttl=30)
+async def list_applications_cached(
+    db: Session,
+    *,
+    status: Status | None = None,
+    platform_id: int | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    rows = list_applications(
+        db, status=status, platform_id=platform_id, limit=limit, offset=offset
+    )
+    return [schemas.ApplicationRead.model_validate(r).model_dump(mode="json") for r in rows]
+
+
+@cache.cached("stats", ttl=60)
+async def stats_cached(db: Session) -> list[dict]:
+    return platform_stats(db)
+
+
+async def invalidate_application_caches() -> None:
+    """Любая мутация заявки инвалидирует и список заявок, и агрегаты /stats."""
+    await cache.invalidate("applications:list")
+    await cache.invalidate("stats")
