@@ -80,3 +80,14 @@ curl -X POST localhost:8000/applications/1/status \
 
 curl localhost:8000/stats
 ```
+
+## Как это выглядит
+
+### CI и тесты
+![CI](docs/screenshots/ci-green.png)
+
+### API
+![Swagger](docs/screenshots/swagger.png)
+
+### Запуск
+![Docker](docs/screenshots/docker-up.png)
